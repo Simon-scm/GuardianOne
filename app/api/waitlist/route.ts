@@ -33,7 +33,7 @@ This is an automated notification from the GuardianOne waitlist.
   try {
     await resend.emails.send({
       from: 'GuardianOne <onboarding@resend.dev>',
-      to: 'contact@guardianone.dev',
+      to: 'simonstz2000@gmail.com',
       subject: 'New Waitlist Signup - GuardianOne',
       text: emailBody,
     });
