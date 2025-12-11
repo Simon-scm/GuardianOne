@@ -1,36 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { Resend } from 'resend';
 
-const dataDir = path.join(process.cwd(), 'data');
-const dataFile = path.join(dataDir, 'waitlist.json');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 function validateEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 }
 
-async function ensureDataDirectory() {
-  try {
-    await fs.access(dataDir);
-  } catch {
-    await fs.mkdir(dataDir, { recursive: true });
-  }
-}
+async function sendWaitlistEmail(
+  email: string,
+  timestamp: string,
+  usageType?: 'private' | 'business'
+): Promise<void> {
+  const usageTypeText = usageType
+    ? usageType === 'private'
+      ? 'Private Use'
+      : 'Business Use'
+    : 'Not specified';
 
-async function readWaitlist(): Promise<Array<{ email: string; timestamp: string; usageType?: 'private' | 'business' }>> {
+  const emailBody = `
+New Waitlist Signup - GuardianOne
+
+Email: ${email}
+Timestamp: ${timestamp}
+Usage Type: ${usageTypeText}
+
+---
+This is an automated notification from the GuardianOne waitlist.
+  `.trim();
+
   try {
-    await ensureDataDirectory();
-    const fileContent = await fs.readFile(dataFile, 'utf-8');
-    return JSON.parse(fileContent);
+    await resend.emails.send({
+      from: 'GuardianOne <noreply@guardianone.dev>',
+      to: 'contact@guardianone.dev',
+      subject: 'New Waitlist Signup - GuardianOne',
+      text: emailBody,
+    });
   } catch (error) {
-    return [];
+    console.error('Failed to send waitlist email:', error);
+    throw error;
   }
-}
-
-async function writeWaitlist(data: Array<{ email: string; timestamp: string; usageType?: 'private' | 'business' }>) {
-  await ensureDataDirectory();
-  await fs.writeFile(dataFile, JSON.stringify(data, null, 2), 'utf-8');
 }
 
 export async function POST(request: NextRequest) {
@@ -54,22 +64,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const waitlist = await readWaitlist();
-
-    if (waitlist.some((entry) => entry.email === trimmedEmail)) {
+    if (!process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY is not configured');
       return NextResponse.json(
-        { error: 'Email already registered' },
-        { status: 409 }
+        { error: 'Email service not configured' },
+        { status: 500 }
       );
     }
 
-    const newEntry = {
-      email: trimmedEmail,
-      timestamp: new Date().toISOString(),
-    };
+    const timestamp = new Date().toISOString();
 
-    waitlist.push(newEntry);
-    await writeWaitlist(waitlist);
+    try {
+      await sendWaitlistEmail(trimmedEmail, timestamp);
+    } catch (error) {
+      console.error('Failed to send waitlist email:', error);
+      return NextResponse.json(
+        { error: 'Failed to send notification email' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(
       { message: 'Successfully added to waitlist', email: trimmedEmail },
@@ -104,23 +117,26 @@ export async function PATCH(request: NextRequest) {
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const waitlist = await readWaitlist();
 
-    const entryIndex = waitlist.findIndex((entry) => entry.email === trimmedEmail);
-
-    if (entryIndex === -1) {
+    if (!process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY is not configured');
       return NextResponse.json(
-        { error: 'Email not found in waitlist' },
-        { status: 404 }
+        { error: 'Email service not configured' },
+        { status: 500 }
       );
     }
 
-    waitlist[entryIndex] = {
-      ...waitlist[entryIndex],
-      usageType: usageType || undefined,
-    };
+    const timestamp = new Date().toISOString();
 
-    await writeWaitlist(waitlist);
+    try {
+      await sendWaitlistEmail(trimmedEmail, timestamp, usageType);
+    } catch (error) {
+      console.error('Failed to send waitlist update email:', error);
+      return NextResponse.json(
+        { error: 'Failed to send notification email' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(
       { message: 'Usage type updated successfully', email: trimmedEmail },
@@ -134,4 +150,3 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
-
