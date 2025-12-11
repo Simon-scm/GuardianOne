@@ -113,14 +113,14 @@ export default function UsageTypeModal({
 
         <div className="flex gap-3">
           <button
-            onClick={handleSubmit}
+            onClick={handleSkip}
             disabled={isSubmitting}
             className="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Skip
           </button>
           <button
-            onClick={handleSkip}
+            onClick={handleSubmit}
             disabled={isSubmitting || !selectedType}
             className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
